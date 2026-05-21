@@ -194,10 +194,10 @@ if ($opt -eq "2" -or $opt -eq "3") {
     Show-Banner
     Write-Host "--- SELECT PERFORMANCE PROFILE ---" -ForegroundColor White -Bold
     Write-Host "  [1] Balanced Memory Saving (Disables Host Disk I/O Caching & sets VRAM to 128MB)" -ForegroundColor Gray
-    Write-Host "      ➔ Saves ~2GB to 4GB Host RAM. Keeps Nested virtualization & VBS fully active." -ForegroundColor Cyan
+    Write-Host "      $($ArrowChar) Saves ~2GB to 4GB Host RAM. Keeps Nested virtualization & VBS fully active." -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  [2] Aggressive Memory Saving (Disables Disk Caching, 128MB VRAM, & disables Nested Hardware VT-x)" -ForegroundColor Gray
-    Write-Host "      ➔ Saves ~6GB to 10GB Host RAM! Recommended if you DO NOT run Docker or WSL2 inside the VM." -ForegroundColor Cyan
+    Write-Host "      $($ArrowChar) Saves ~6GB to 10GB Host RAM! Recommended if you DO NOT run Docker or WSL2 inside the VM." -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Select Profile Option [1]: " -NoNewline -ForegroundColor Yellow
     $profileOpt = Read-Host
