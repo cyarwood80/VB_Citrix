@@ -17,7 +17,8 @@ This repository eliminates multiple scattered templates, manual XML manipulation
 3. [Prerequisites](#-prerequisites)
 4. [Quick Start Guide](#-quick-start-guide)
 5. [Low-Latency Optimization Layer](#-low-latency-optimization-layer)
-6. [Troubleshooting & Support](#-troubleshooting--support)
+6. [Host-Side Memory Optimization](#-host-side-memory-optimization)
+7. [Troubleshooting & Support](#-troubleshooting--support)
 
 ---
 
@@ -136,6 +137,30 @@ To finalize input responsiveness on an existing VM, navigate inside your running
     *   **Instant UI Transitions**: Sets `MenuShowDelay` to `0` ms and `MouseHoverTime` to `8` ms.
     *   **Snappy Keyboard**: Boosts `KeyboardSpeed` to `31` and drops `KeyboardDelay` to `0`.
     *   **Process Latency Bypass**: Configures HKLM multimedia profiles to grant 100% CPU priority to interactive user processes.
+
+---
+
+## 📉 Host-Side Memory Optimization
+
+VirtualBox running nested virtualization and 3D graphics on a Windows host can consume a high amount of physical RAM due to **shadow page table MMU tracking** and **disk page caching**. 
+
+We have added a specialized host-side memory optimizer script: **`Optimize-VBoxHostMemory.ps1`**. This tool runs on the host as Administrator and provides two major optimization levels:
+
+### 1. Active RAM Trimmer (Live & Safe)
+Forces the Windows Memory Manager to immediately reclaim standby memory pages and compress the working set of all running `VirtualBoxVM` processes. This instantly slashes reported Task Manager RAM footprint (often reclaiming **2GB to 4GB+** of host RAM instantly) without affecting guest stability!
+
+### 2. Permanent VM Config Tuning (Two Profiles)
+Allows shutting down the VM and applying highly optimized low-memory hardware profiles:
+*   **Balanced Profile**: Disables host-side disk I/O caching (saving disk buffers) and sets VRAM to `128MB` (which is perfectly adequate for single displays). Saves **~2GB to 4GB** host RAM.
+*   **Aggressive Profile**: Disables disk caching, caps VRAM at `128MB`, and **disables Nested HW Virtualization (`--nested-hw-virt off`)**. This removes the massive double address translation (SLAT) page tables. Saves **~6GB to 10GB** host RAM! *(Recommended if you do not run Docker or WSL2 inside the VM).*
+
+### How to Run:
+On your Windows host, open a **PowerShell terminal as Administrator** and run:
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process
+& ".\Optimize-VBoxHostMemory.ps1"
+```
+Choose your desired option from the interactive menu!
 
 ---
 

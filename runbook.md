@@ -168,6 +168,25 @@ To finalize eliminating input lag on an existing VM (or complete the optimizatio
 
 ---
 
+## 5.5 Host-Side Memory Optimization
+
+Because running nested virtualization with 3D graphics on a Windows host naturally commands high memory footprints (shadow page tables and disk caching), we have created a dedicated host-side tuning utility: **`Optimize-VBoxHostMemory.ps1`**.
+
+You can run this directly on your Windows host as an Administrator to:
+1.  **Trim Active RAM Footprint (Live & Safe)**: Uses Windows API page compression to immediately release unused memory cache in running `VirtualBoxVM` processes, reclaiming several gigabytes of host RAM instantly.
+2.  **Apply Low-Memory hardware configurations**:
+    *   *Balanced Profile*: Disables host-side disk caching and caps VRAM at `128MB` (adequate for single displays).
+    *   *Aggressive Profile*: Disables disk caching, sets VRAM to `128MB`, and **disables Nested Virtualization (`--nested-hw-virt off`)**. Disabling VT-x passthrough removes the massive shadow address tables, saving **6GB to 10GB** of host memory! *(Only select if you do not run Docker/WSL2 inside the guest VM).*
+
+### How to Run:
+In your elevated **host PowerShell terminal**, execute:
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process
+& "C:\Users\chris\.gemini\antigravity\scratch\VBoxWin11Provisioner\Optimize-VBoxHostMemory.ps1"
+```
+
+---
+
 ## 6. Troubleshooting Protocols
 
 ### Webcam Redirection Error (`0xA00F4244 <NoCamerasAreAttached>`)
