@@ -1376,8 +1376,8 @@ Show-ProgressBar 10 "Creating VM shell..."
 Write-Success "Created Windows 11 64-bit shell registration."
 
 Show-ProgressBar 20 "Configuring Hardware Specs..."
-& $VBoxManagePath modifyvm $VMName --cpus $VMCPUs --memory $VMRAM_MB --vram 128 --graphicscontroller vboxsvga --accelerate-3d on | Out-Null
-Write-Success "Registered CPU ($VMCPUs Cores), RAM ($VMRAM_MB MB), 3D acceleration, and 128MB VRAM."
+& $VBoxManagePath modifyvm $VMName --cpus $VMCPUs --memory $VMRAM_MB --vram 256 --graphicscontroller vboxsvga --accelerate-3d on | Out-Null
+Write-Success "Registered CPU ($VMCPUs Cores), RAM ($VMRAM_MB MB), 3D acceleration, and 256MB VRAM."
 
 # 5. Enable hardware passthrough and high performance optimizations
 Show-ProgressBar 30 "Injecting Advanced High-Performance Virtualization & Priority..."
