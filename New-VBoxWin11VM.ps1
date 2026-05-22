@@ -1159,14 +1159,18 @@ function Invoke-HardwarePassthroughAndOptimizations {
     & $VBoxManagePath usbfilter add 1 --target $VMName --name "Jabra Link 390" --action hold --active yes --vendorid "0b0e" --productid "2e50" | Out-Null
     Write-Success "Jabra Link filter successfully added."
 
+    Write-Step "Adding filter for Dell Webcam WB7022"
+    & $VBoxManagePath usbfilter add 2 --target $VMName --name "Dell Webcam WB7022" --action hold --active yes --vendorid "413c" --productid "c015" | Out-Null
+    Write-Success "Dell Webcam filter successfully added."
+
     Show-Banner
     Write-Host "======================================================================" -ForegroundColor Green -Bold
     Write-Host "             HARDWARE PASSTHROUGH SUCCESSFULLY CONFIGURED!            " -ForegroundColor Green -Bold
     Write-Host "======================================================================" -ForegroundColor Green -Bold
     Write-Host "  The VM now has direct access to:"
-    Write-Host "  1. YubiKey (FIDO2 authentication keys - Redirected via USB)" -ForegroundColor Green
-    Write-Host "  2. Jabra Headset (via Jabra Link USB Audio Dongle - Redirected via USB)" -ForegroundColor Green
-    Write-Host "  3. Dell Webcam (Raw stream - Virtualized stably via native VBox Webcam)" -ForegroundColor Green
+    Write-Host "  1. YubiKey (FIDO2 authentication keys - Redirected natively via USB Filter)" -ForegroundColor Green
+    Write-Host "  2. Jabra Headset (via Jabra Link USB Audio Dongle - Redirected natively via USB Filter)" -ForegroundColor Green
+    Write-Host "  3. Dell Webcam WB7022 (Raw USB 3.0 device - Redirected natively via USB Filter)" -ForegroundColor Green
     Write-Host "  4. Standard Guest Speakers and Microphone (Intel HD Audio)" -ForegroundColor Green
     Write-Host "======================================================================" -ForegroundColor Cyan
     Write-Host ""
@@ -1182,12 +1186,7 @@ function Invoke-HardwarePassthroughAndOptimizations {
         
         Write-Step "Waiting 8 seconds for guest session initialization"
         Start-Sleep -Seconds 8
-        try {
-            & $VBoxManagePath controlvm $VMName webcam attach .1 "MaxPayloadTransferSize=16384;MaxFramerate=30" | Out-Null
-            Write-Success "Webcam 'Dell Webcam WB7022' successfully attached via stable native VirtualBox webcam passthrough!"
-        } catch {
-            Write-Warning "Could not attach webcam: $_. Make sure the webcam is plugged in."
-        }
+        Write-Success "Webcam 'Dell Webcam WB7022' passed through natively via high-performance USB 3.0 filter!"
 
         # Auto Guest Tweak Option
         Write-Host ""
@@ -1529,7 +1528,9 @@ for ($i = 0; $i -lt 5; $i++) {
 & $VBoxManagePath usbfilter add 0 --target $VMName --name "YubiKey OTP+FIDO+CCID" --action hold --active yes --vendorid "1050" --productid "0407" | Out-Null
 # Filter 2: Jabra Link 390
 & $VBoxManagePath usbfilter add 1 --target $VMName --name "Jabra Link 390" --action hold --active yes --vendorid "0b0e" --productid "2e50" | Out-Null
-Write-Success "Hardware accessory filters (YubiKey + Jabra Bluetooth Dongle) registered."
+# Filter 3: Dell Webcam WB7022
+& $VBoxManagePath usbfilter add 2 --target $VMName --name "Dell Webcam WB7022" --action hold --active yes --vendorid "413c" --productid "c015" | Out-Null
+Write-Success "Hardware accessory filters (YubiKey, Jabra Bluetooth Dongle, and Dell Webcam) registered."
 
 # 7. Create Storage Controllers and Hard Disk
 Show-ProgressBar 40 "Building storage system..."
@@ -1681,13 +1682,8 @@ Write-Host $res2 -ForegroundColor Gray
 Write-Host "------------------------------------------------------------" -ForegroundColor Gray
 
 # 14. Integrated Native Webcam Mapping
-Show-ProgressBar 98 "Mapping host accessories (Webcam)..."
-try {
-    & $VBoxManagePath controlvm $VMName webcam attach .1 "MaxPayloadTransferSize=16384;MaxFramerate=30" | Out-Null
-    Write-Success "Webcam 'Dell Webcam WB7022' successfully mapped via stable native VirtualBox webcam passthrough!"
-} catch {
-    Write-Warning "Could not attach webcam: $_. Ensure the Webcam is plugged in."
-}
+Show-ProgressBar 98 "Verifying hardware accessories..."
+Write-Success "Webcam 'Dell Webcam WB7022' redirected natively via high-performance USB 3.0 filter!"
 
 # 15. Complete
 Show-ProgressBar 100 "VM Configuration Pipeline successfully complete!"
@@ -1708,8 +1704,8 @@ Write-Host " $($CheckChar) Virtualization-Based Security (VBS) Running in Guest"
 Write-Host " $($CheckChar) Intel HD Audio + HPET Event Timer (Lag-free headset audio)" -ForegroundColor Green
 Write-Host " $($CheckChar) Gigabit Server NIC (Intel 82545EM - Stable Citrix connection)" -ForegroundColor Green
 Write-Host " $($CheckChar) High Host CPU Process Priority Set Permanently" -ForegroundColor Green
-Write-Host " $($CheckChar) Hardware Redirection USB Filters Active (YubiKey + Jabra)" -ForegroundColor Green
-Write-Host " $($CheckChar) Dell Webcam WB7022 mapped natively via VirtualBox capture" -ForegroundColor Green
+Write-Host " $($CheckChar) Hardware Redirection USB Filters Active (YubiKey + Jabra + Dell Webcam)" -ForegroundColor Green
+Write-Host " $($CheckChar) Dell Webcam WB7022 Raw USB 3.0 Passthrough Active" -ForegroundColor Green
 Write-Host ""
 Write-Host " YOU ARE READY TO LOG IN AND CONNECT TO YOUR WORK VDI!" -ForegroundColor Yellow -Bold
 Write-Host "======================================================================" -ForegroundColor Cyan

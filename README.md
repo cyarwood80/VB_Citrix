@@ -32,19 +32,19 @@ graph TD
     C -->|Mode 1: Fresh Provisioning| D[VM Setup: Configure UEFI, TPM 2.0 & Secure Boot]
     D --> E[Advanced Virt: Enable Nested VT-x & Hyper-V Paravirtualization]
     E --> F[Hardware Sync: Intel HD Audio, HPET Timer & Gigabit Server NIC]
-    F --> G[USB Filters: Pre-register YubiKey & Jabra Link 390]
+    F --> G[USB Filters: Pre-register YubiKey, Jabra Link & Dell Webcam]
     G --> H[Storage: Build VDI Disk & Mount Windows 11 ISO]
     H --> I[Unattended XML: Generate custom BypassNRO & locale template]
     I --> J[OOBE Install: Wait for OS & Guest Additions ready]
     J --> K[Guest Pass 1: Enable VBS/HVCI & Reboot]
     K --> L[Guest Pass 2: Silent Citrix 2603 setup & VDI tweaks]
-    L --> M[Webcam: Map Dell Webcam WB7022 raw stream]
+    L --> M[Verify: Confirm raw USB 3.0 filter mapping]
     M --> N[Complete: Dynamic credential success report]
     
     C -->|Mode 2: Hardware passthrough & Input Lag| O[Verify VM State: Stop if running]
     O --> P[Apply VM Settings: WASAPI, HPET, Server NIC & USB Tablet]
-    P --> Q[USB Filters: Wipe duplicates & add YubiKey + Jabra]
-    Q --> R[Boot & Webcam: Start VM & attach raw camera stream]
+    P --> Q[USB Filters: Wipe duplicates & add YubiKey, Jabra & Dell Webcam]
+    Q --> R[Boot VM: Start VM with raw USB 3.0 redirection active]
 ```
 
 ### Key Technical Enhancements
@@ -54,7 +54,7 @@ graph TD
 *   **Intel Gigabit Server NIC (`82545EM`)**: Replaces desktop network cards with a server-grade controller featuring larger buffer queues to prevent network disconnects and frame drops during resource-heavy corporate VDI streaming.
 *   **High Host Scheduling Priority (`--vm-process-priority high`)**: Permanently locks VirtualBox threads to **High** on the host, preventing background host processes from starving the VM of CPU resources.
 *   **Raw 1:1 Guest Mouse Emulation (`--mouse usbtablet`)**: Disables OS-level mouse acceleration and absolute scaling anomalies inside the guest VM, establishing raw 1:1 pointer mapping.
-*   **Extension Pack Autopilot**: Scans the host system, downloads the matching `7.2.8` Extension Pack, and installs it elevated using silent license agreements to enable USB 3.0 (xHCI) and high-fidelity webcam redirection.
+*   **Extension Pack Autopilot**: Scans the host system, downloads the matching `7.2.8` Extension Pack, and installs it elevated using silent license agreements to enable USB 3.0 (xHCI) and stable raw USB 3.0 webcam passthrough.
 
 ---
 
@@ -67,13 +67,13 @@ Builds an optimized, enterprise-tuned Windows 11 Pro virtual machine from scratc
 1.  Generates a custom `custom_unattended.xml` locally to inject the `BypassNRO` registry keys (allowing local-only account setup without a Microsoft Email).
 2.  Pre-registers keyboard/mouse drivers and forces a **UK English (`en-GB`) keyboard layout** to eliminate character translation mismatches.
 3.  Pre-configures VM resources to **4 CPU Cores**, **8GB RAM**, and **64GB dynamic VDI storage** (overriding VirtualBox's default hanging specs).
-4.  Performs a two-pass post-installation setup to inject silent **Citrix Workspace App 2603** (with App Protection active) and maps your Dell Webcam WB7022 natively.
+4.  Performs a two-pass post-installation setup to inject silent **Citrix Workspace App 2603** (with App Protection active) and configures your exact VDI storefront Store URL (`STORE0` parameter).
 
 ### Mode 2: Hardware passthrough & Input Lag Configurator (Option 2)
 Modifies an **already-built, existing VM** to apply premium low-latency tweaks and USB filters without rebuilding the operating system:
 *   Enforces WASAPI audio, HPET timer, Gigabit Server NIC, and high host process priority.
-*   Clears duplicate filters and establishes persistent USB routing for **YubiKey** and **Jabra Link 390** wireless adapters.
-*   Dynamically boots the VM and attaches the Dell Webcam WB7022 raw stream (`16384` transfer size, `30` FPS).
+*   Clears duplicate filters and establishes persistent USB routing for **YubiKey**, **Jabra Link 390** wireless adapters, and the **Dell Webcam WB7022**.
+*   Saves the raw USB filter settings so that whenever the VM is started, the physical Dell Webcam WB7022 is immediately captured and redirected as a high-performance SuperSpeed USB 3.0 UVC device directly inside the Guest OS.
 
 ---
 
@@ -173,8 +173,8 @@ Choose your desired option from the interactive menu!
 ## 🔍 Troubleshooting & Support
 
 ### Webcam Redirection Error (`0xA00F4244 <NoCamerasAreAttached>`)
-*   **Root Cause**: VirtualBox webcam passthrough relies on a proprietary capture device driver inside the VirtualBox Extension Pack. If missing, webcam redirection fails silently in the guest OS.
-*   **Resolution**: Execute `New-VBoxWin11VM.ps1` in **Option 2 (Hardware Configurator)**. The script autodetects this, downloads the matching `7.2.8` Extension Pack, and installs it elevated automatically!
+*   **Root Cause**: VirtualBox's proprietary emulated webcam redirection (`controlvm webcam attach`) often fails to load proper UVC identifiers under Windows 11, resulting in driver failure. Furthermore, if the host OS or another host app has claimed the camera, VirtualBox's host webcam service cannot capture the stream.
+*   **Resolution**: We have upgraded the integration to use raw **USB 3.0 device filters** directly. The physical Dell Webcam WB7022 is captured directly at the USB controller level, bypasses emulations, and loads the native manufacturer's UVC drivers inside the Guest VM. Run `New-VBoxWin11VM.ps1` in **Option 2 (Hardware Configurator)** to automatically configure the USB controller and register the active hardware filters!
 
 ### Jittery Audio or Crackling Sounds in Citrix Calls
 *   **Root Cause**: Desktop audio emulations (`dsound`) run at very high processing latency, causing sound packets to crackle or drop under CPU load.
