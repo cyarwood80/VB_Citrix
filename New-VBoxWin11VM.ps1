@@ -553,6 +553,11 @@ try {
         if (!(Test-Path $dwmPath)) { New-Item -Path $dwmPath -Force | Out-Null }
         Set-ItemProperty -Path $dwmPath -Name "AlwaysHibernateThumbnails" -Value 1 -Type DWord -Force
         Set-ItemProperty -Path $dwmPath -Name "EnableAeroPeek" -Value 0 -Type DWord -Force
+
+        # E. Citrix Client DPI Scaling Awareness (prevents font/layout blurriness and scaling lags)
+        $citrixDwmPath = Join-Path $basePath "Software\Citrix\ICA Client\DPI"
+        if (!(Test-Path $citrixDwmPath)) { New-Item -Path $citrixDwmPath -Force | Out-Null }
+        Set-ItemProperty -Path $citrixDwmPath -Name "DpiAware" -Value 1 -Type DWord -Force
     }
 
     # Apply to current user profile
@@ -570,7 +575,37 @@ try {
         Start-Sleep -Milliseconds 200
         reg unload HKU\DefaultUser | Out-Null
     }
+
+    # Citrix client-side graphics performance optimizations
+    Write-Log "Configuring Citrix Workspace graphics optimizations (disabling HW acceleration and hybrid D3D to force clean CPU software decode)..."
+    try {
+        $CitrixPoliciesPath = "HKLM:\SOFTWARE\Policies\Citrix\ICA Client\Graphics Engine"
+        $CitrixPoliciesWowPath = "HKLM:\SOFTWARE\WOW6432Node\Policies\Citrix\ICA Client\Graphics Engine"
+        
+        if (!(Test-Path $CitrixPoliciesPath)) { New-Item -Path $CitrixPoliciesPath -Force | Out-Null }
+        if (!(Test-Path $CitrixPoliciesWowPath)) { New-Item -Path $CitrixPoliciesWowPath -Force | Out-Null }
+        
+        Set-ItemProperty -Path $CitrixPoliciesPath -Name "HWacceleration" -Value 0 -Type DWord -Force
+        Set-ItemProperty -Path $CitrixPoliciesWowPath -Name "HWacceleration" -Value 0 -Type DWord -Force
+        
+        $CitrixGraphicsPath = "HKLM:\SOFTWARE\Citrix\Graphics"
+        $CitrixGraphicsWowPath = "HKLM:\SOFTWARE\WOW6432Node\Citrix\Graphics"
+        
+        if (!(Test-Path $CitrixGraphicsPath)) { New-Item -Path $CitrixGraphicsPath -Force | Out-Null }
+        if (!(Test-Path $CitrixGraphicsWowPath)) { New-Item -Path $CitrixGraphicsWowPath -Force | Out-Null }
+        
+        Set-ItemProperty -Path $CitrixGraphicsPath -Name "UseD3DHybrid" -Value 0 -Type DWord -Force
+        Set-ItemProperty -Path $CitrixGraphicsPath -Name "DisplayMemoryLimit" -Value 131072 -Type DWord -Force
+        
+        Set-ItemProperty -Path $CitrixGraphicsWowPath -Name "UseD3DHybrid" -Value 0 -Type DWord -Force
+        Set-ItemProperty -Path $CitrixGraphicsWowPath -Name "DisplayMemoryLimit" -Value 131072 -Type DWord -Force
+        Write-Log "Citrix client-side graphics optimizations and display buffering successfully applied!"
+    } catch {
+        Write-Log "Failed to configure Citrix graphics registry policies: $_" "WARNING"
+    }
+
     Write-Log "Successfully applied mouse acceleration disable, keyboard response, input queues, DWM, and system profile tweaks!"
+
 } catch {
     Write-Log "Failed to apply input/graphics optimizations: $_" "WARNING"
 }
@@ -775,6 +810,11 @@ $ApplyUserInputTweaks = {
     Set-ItemProperty -Path $dwmPath -Name "AlwaysHibernateThumbnails" -Value 1 -Type DWord -Force
     # EnableAeroPeek = 0 (disables background desktop peek hover overlays)
     Set-ItemProperty -Path $dwmPath -Name "EnableAeroPeek" -Value 0 -Type DWord -Force
+
+    # E. Citrix Client DPI Scaling Awareness (prevents font/layout blurriness and scaling lags)
+    $citrixDwmPath = Join-Path $basePath "Software\Citrix\ICA Client\DPI"
+    if (!(Test-Path $citrixDwmPath)) { New-Item -Path $citrixDwmPath -Force | Out-Null }
+    Set-ItemProperty -Path $citrixDwmPath -Name "DpiAware" -Value 1 -Type DWord -Force
 }
 
 # 6. Apply Input Tweaks to Current Administrator Profile
@@ -832,26 +872,56 @@ try {
     Write-Warning "Failed to adjust visual effects: $_"
 }
 
-# 9. Finished
+# 9. Citrix Client-Side Graphics Performance Optimizations
+Write-Step "Configuring Citrix Workspace graphics optimizations (disabling HW acceleration and hybrid D3D to force clean CPU software decode)"
+try {
+    $CitrixPoliciesPath = "HKLM:\SOFTWARE\Policies\Citrix\ICA Client\Graphics Engine"
+    $CitrixPoliciesWowPath = "HKLM:\SOFTWARE\WOW6432Node\Policies\Citrix\ICA Client\Graphics Engine"
+    
+    if (!(Test-Path $CitrixPoliciesPath)) { New-Item -Path $CitrixPoliciesPath -Force | Out-Null }
+    if (!(Test-Path $CitrixPoliciesWowPath)) { New-Item -Path $CitrixPoliciesWowPath -Force | Out-Null }
+    
+    Set-ItemProperty -Path $CitrixPoliciesPath -Name "HWacceleration" -Value 0 -Type DWord -Force
+    Set-ItemProperty -Path $CitrixPoliciesWowPath -Name "HWacceleration" -Value 0 -Type DWord -Force
+    
+    $CitrixGraphicsPath = "HKLM:\SOFTWARE\Citrix\Graphics"
+    $CitrixGraphicsWowPath = "HKLM:\SOFTWARE\WOW6432Node\Citrix\Graphics"
+    
+    if (!(Test-Path $CitrixGraphicsPath)) { New-Item -Path $CitrixGraphicsPath -Force | Out-Null }
+    if (!(Test-Path $CitrixGraphicsWowPath)) { New-Item -Path $CitrixGraphicsWowPath -Force | Out-Null }
+    
+    Set-ItemProperty -Path $CitrixGraphicsPath -Name "UseD3DHybrid" -Value 0 -Type DWord -Force
+    Set-ItemProperty -Path $CitrixGraphicsPath -Name "DisplayMemoryLimit" -Value 131072 -Type DWord -Force
+    
+    Set-ItemProperty -Path $CitrixGraphicsWowPath -Name "UseD3DHybrid" -Value 0 -Type DWord -Force
+    Set-ItemProperty -Path $CitrixGraphicsWowPath -Name "DisplayMemoryLimit" -Value 131072 -Type DWord -Force
+    Write-Success "Citrix client-side graphics optimizations and display buffering successfully applied!"
+} catch {
+    Write-Warning "Failed to configure Citrix graphics registry policies: $_"
+}
+
+# 10. Finished
 Show-Banner
 Write-Host "======================================================================" -ForegroundColor Green -Bold
-Write-Host "             GUEST INPUT & GRAPHICS OPTIMIZATION COMPLETE!            " -ForegroundColor Green -Bold
+Write-Host "             GUEST INPUT AND GRAPHICS OPTIMIZATION COMPLETE!            " -ForegroundColor Green -Bold
 Write-Host "======================================================================" -ForegroundColor Green -Bold
 Write-Host ""
 Write-Host " The following low-latency profiles have been applied successfully:" -ForegroundColor White
 Write-Host " $($CheckChar) Disabled Windows Mouse Acceleration (Enabled raw 1:1 cursor)" -ForegroundColor Green
 Write-Host " $($CheckChar) Shortened Keyboard Repeat Delay to 250ms (Shortest possible)" -ForegroundColor Green
 Write-Host " $($CheckChar) Maximized Keyboard Auto-Repeat Rate (Speed 31)" -ForegroundColor Green
-Write-Host " $($CheckChar) Minimized Menu & Hover opening latency (0ms / 8ms)" -ForegroundColor Green
+Write-Host " $($CheckChar) Minimized Menu and Hover opening latency (0ms / 8ms)" -ForegroundColor Green
 Write-Host " $($CheckChar) Set System Responsiveness scheduler to 100% User Process" -ForegroundColor Green
 Write-Host " $($CheckChar) Set CPU Foreground Priority separation to 26 (Interactive UI)" -ForegroundColor Green
 Write-Host " $($CheckChar) Shrunk Mouse/Keyboard data queue depth to 30 (Instant event flush)" -ForegroundColor Green
 Write-Host " $($CheckChar) Enabled Drag Outline-Only window drawing (No DWM redraw lag)" -ForegroundColor Green
 Write-Host " $($CheckChar) Enabled DWM live hover thumbnail and Aero Peek hibernation" -ForegroundColor Green
 Write-Host " $($CheckChar) Disabled Network throttling under high CPU utilization" -ForegroundColor Green
-Write-Host " $($CheckChar) Set TCP Ack Frequency & TCP No Delay on all interfaces" -ForegroundColor Green
+Write-Host " $($CheckChar) Set TCP Ack Frequency and TCP No Delay on all interfaces" -ForegroundColor Green
 Write-Host " $($CheckChar) Enabled High Performance Windows Power Plan" -ForegroundColor Green
 Write-Host " $($CheckChar) Disabled OS-level visual transition effects" -ForegroundColor Green
+Write-Host " $($CheckChar) Set Citrix Graphics HW Acceleration to 0 (Forced fast CPU decode)" -ForegroundColor Green
+Write-Host " $($CheckChar) Set Citrix UseD3DHybrid to 0 and DisplayMemoryLimit to 128MB" -ForegroundColor Green
 Write-Host ""
 Write-Host " Note: Some settings will take effect on the next login or after reboot." -ForegroundColor Yellow -Bold
 Write-Host " Please LOG OUT and LOG BACK IN, or REBOOT the VM now!" -ForegroundColor Yellow -Bold
@@ -1062,6 +1132,12 @@ function Invoke-HardwarePassthroughAndOptimizations {
     & $VBoxManagePath modifyvm $VMName --audio-controller hda --audio-driver was --x86-hpet on | Out-Null
     & $VBoxManagePath modifyvm $VMName --audio-in on --audio-out on | Out-Null
     Write-Success "Upgraded controller to Intel HD Audio and enabled HPET precision timers."
+
+    # Apply Display memory and 3D Acceleration
+    Write-Step "Maximizing video memory to 256MB and enabling 3D hardware acceleration"
+    & $VBoxManagePath modifyvm $VMName --vram 256 --graphicscontroller vboxsvga --accelerate-3d on | Out-Null
+    Write-Success "Display optimized: 256MB VRAM, VBoxSVGA controller, and 3D acceleration active."
+
 
     # Apply USB, Network, Priority, Keyboard/Mouse, and Low-Latency Paging/Speculative controls
     Write-Step "Enabling USB 3.0 (xHCI), Gigabit Server NIC (82545EM), High Process Priority, Low-Latency Large Pages, and Speculative mitigations bypass"

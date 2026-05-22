@@ -193,10 +193,10 @@ if ($opt -eq "2" -or $opt -eq "3") {
 
     Show-Banner
     Write-Host "--- SELECT PERFORMANCE PROFILE ---" -ForegroundColor White -Bold
-    Write-Host "  [1] Balanced Memory Saving (Disables Host Disk I/O Caching & sets VRAM to 128MB)" -ForegroundColor Gray
-    Write-Host "      $($ArrowChar) Saves ~2GB to 4GB Host RAM. Keeps Nested virtualization & VBS fully active." -ForegroundColor Cyan
+    Write-Host "  [1] Balanced Memory Saving (Disables Host Disk I/O Caching and retains high-performance 256MB VRAM)" -ForegroundColor Gray
+    Write-Host "      $($ArrowChar) Saves ~2GB to 4GB Host RAM. Keeps Nested virtualization and VBS fully active." -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  [2] Aggressive Memory Saving (Disables Disk Caching, 128MB VRAM, & disables Nested Hardware VT-x)" -ForegroundColor Gray
+    Write-Host "  [2] Aggressive Memory Saving (Disables Disk Caching, reduces VRAM to 128MB, and disables Nested Hardware VT-x)" -ForegroundColor Gray
     Write-Host "      $($ArrowChar) Saves ~6GB to 10GB Host RAM! Recommended if you DO NOT run Docker or WSL2 inside the VM." -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Select Profile Option [1]: " -NoNewline -ForegroundColor Yellow
@@ -209,9 +209,14 @@ if ($opt -eq "2" -or $opt -eq "3") {
     & $VBoxManagePath storagectl $VMName --name "SATA Controller" --hostiocache off | Out-Null
     Write-Success "Disabled Host Disk I/O Caching (Saves disk caching overhead)."
 
-    # 2. Optimize VRAM Pool (Saves 1GB+ graphics pipeline allocation)
-    & $VBoxManagePath modifyvm $VMName --vram 128 | Out-Null
-    Write-Success "Reduced VRAM to 128MB (Perfectly adequate for 1080p/1600x1200 single displays)."
+    # 2. Optimize VRAM Pool based on selected profile
+    if ($profileOpt -eq "2") {
+        & $VBoxManagePath modifyvm $VMName --vram 128 --accelerate-3d off | Out-Null
+        Write-Success "Reduced VRAM to 128MB and disabled 3D acceleration (Profile 2 Aggressive Memory Saving)."
+    } else {
+        & $VBoxManagePath modifyvm $VMName --vram 256 --accelerate-3d on | Out-Null
+        Write-Success "Retained high-performance 256MB VRAM with 3D acceleration active (Profile 1 Balanced)."
+    }
 
     # 3. Aggressive Profile: Toggle Nested Virtualization
     if ($profileOpt -eq "2") {
