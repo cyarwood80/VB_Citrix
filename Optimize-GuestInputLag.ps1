@@ -1,4 +1,4 @@
-﻿# WINDOWS 11 GUEST INPUT RESPONSIVENESS OPTIMIZER
+# WINDOWS 11 GUEST INPUT RESPONSIVENESS OPTIMIZER
 # File: Optimize-GuestInputLag.ps1
 # Description: Guest-side optimization script to eliminate mouse and keyboard input lag,
 #              disable mouse acceleration, maximize keyboard repeat rates, tune system
@@ -60,17 +60,28 @@ if (-not $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administ
 }
 Write-Success "Elevated Administrator privileges confirmed."
 
-# 2. System Profile Responsiveness adjustments
-Write-Step "Configuring Windows Multimedia System Profile scheduler"
+# 2. System-wide Responsiveness and Input Queue Tuning
+Write-Step "Configuring System-wide low-latency responsiveness and input buffer queues"
 try {
+    # SystemResponsiveness = 0 allocates 100% of CPU resource scheduling priority to interactive user processes
     $SysProfilePath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
-    # SystemResponsiveness = 0 allocates 100% of CPU resource scheduling priority to interactive user processes (0x14/20% is default)
     Set-ItemProperty -Path $SysProfilePath -Name "SystemResponsiveness" -Value 0 -Type DWord -Force
-    # NetworkThrottlingIndex = 0xffffffff disables network packet throttling under high CPU load
     Set-ItemProperty -Path $SysProfilePath -Name "NetworkThrottlingIndex" -Value 0xffffffff -Type DWord -Force
-    Write-Success "System scheduler optimized for 100% user process priority."
+
+    # Win32PrioritySeparation = 26 (0x1a) allocates short, variable, high priority scheduling quanta to foreground processes (snappy UI)
+    $PriorityControlPath = "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl"
+    Set-ItemProperty -Path $PriorityControlPath -Name "Win32PrioritySeparation" -Value 26 -Type DWord -Force
+
+    # Input Queues: reduces buffer depth from 100 to 30 to flush events instantly and prevent input lag buildup
+    $MouclassPath = "HKLM:\SYSTEM\CurrentControlSet\Services\mouclass\Parameters"
+    Set-ItemProperty -Path $MouclassPath -Name "MouseDataQueueSize" -Value 30 -Type DWord -Force
+
+    $KbdclassPath = "HKLM:\SYSTEM\CurrentControlSet\Services\kbdclass\Parameters"
+    Set-ItemProperty -Path $KbdclassPath -Name "KeyboardDataQueueSize" -Value 30 -Type DWord -Force
+
+    Write-Success "System scheduler, priority separation, and mouse/keyboard buffer queues tuned successfully."
 } catch {
-    Write-Warning "Failed to optimize system profile scheduler: $_"
+    Write-Warning "Failed to optimize system-wide responsiveness settings: $_"
 }
 
 # 3. Apply Low Latency TCP settings (TCP Ack Frequency & TCP No Delay)
@@ -126,6 +137,21 @@ $ApplyUserInputTweaks = {
     if (!(Test-Path $desktopPath)) { New-Item -Path $desktopPath -Force | Out-Null }
     # MenuShowDelay = 0ms (makes all menus/overlays render instantaneously upon click)
     Set-ItemProperty -Path $desktopPath -Name "MenuShowDelay" -Value "0" -Type String -Force
+    # DragFullWindows = "0" (shows window border outline while dragging, saving massive DWM redraws)
+    Set-ItemProperty -Path $desktopPath -Name "DragFullWindows" -Value "0" -Type String -Force
+    
+    # D. Minimize Window transition and DWM hover latency
+    $metricsPath = Join-Path $basePath "Control Panel\Desktop\WindowMetrics"
+    if (!(Test-Path $metricsPath)) { New-Item -Path $metricsPath -Force | Out-Null }
+    # MinAnimate = "0" (disables minimize/maximize animation for instant window transitions)
+    Set-ItemProperty -Path $metricsPath -Name "MinAnimate" -Value "0" -Type String -Force
+
+    $dwmPath = Join-Path $basePath "Software\Microsoft\Windows\DWM"
+    if (!(Test-Path $dwmPath)) { New-Item -Path $dwmPath -Force | Out-Null }
+    # AlwaysHibernateThumbnails = 1 (disables live background DWM taskbar hover thumbnail rendering)
+    Set-ItemProperty -Path $dwmPath -Name "AlwaysHibernateThumbnails" -Value 1 -Type DWord -Force
+    # EnableAeroPeek = 0 (disables background desktop peek hover overlays)
+    Set-ItemProperty -Path $dwmPath -Name "EnableAeroPeek" -Value 0 -Type DWord -Force
 }
 
 # 6. Apply Input Tweaks to Current Administrator Profile
@@ -186,7 +212,7 @@ try {
 # 9. Finished
 Show-Banner
 Write-Host "======================================================================" -ForegroundColor Green -Bold
-Write-Host "             GUEST INPUT LAG OPTIMIZATION COMPLETE!                   " -ForegroundColor Green -Bold
+Write-Host "             GUEST INPUT & GRAPHICS OPTIMIZATION COMPLETE!            " -ForegroundColor Green -Bold
 Write-Host "======================================================================" -ForegroundColor Green -Bold
 Write-Host ""
 Write-Host " The following low-latency profiles have been applied successfully:" -ForegroundColor White
@@ -195,12 +221,16 @@ Write-Host " $($CheckChar) Shortened Keyboard Repeat Delay to 250ms (Shortest po
 Write-Host " $($CheckChar) Maximized Keyboard Auto-Repeat Rate (Speed 31)" -ForegroundColor Green
 Write-Host " $($CheckChar) Minimized Menu & Hover opening latency (0ms / 8ms)" -ForegroundColor Green
 Write-Host " $($CheckChar) Set System Responsiveness scheduler to 100% User Process" -ForegroundColor Green
+Write-Host " $($CheckChar) Set CPU Foreground Priority separation to 26 (Interactive UI)" -ForegroundColor Green
+Write-Host " $($CheckChar) Shrunk Mouse/Keyboard data queue depth to 30 (Instant event flush)" -ForegroundColor Green
+Write-Host " $($CheckChar) Enabled Drag Outline-Only window drawing (No DWM redraw lag)" -ForegroundColor Green
+Write-Host " $($CheckChar) Enabled DWM live hover thumbnail and Aero Peek hibernation" -ForegroundColor Green
 Write-Host " $($CheckChar) Disabled Network throttling under high CPU utilization" -ForegroundColor Green
 Write-Host " $($CheckChar) Set TCP Ack Frequency & TCP No Delay on all interfaces" -ForegroundColor Green
 Write-Host " $($CheckChar) Enabled High Performance Windows Power Plan" -ForegroundColor Green
 Write-Host " $($CheckChar) Disabled OS-level visual transition effects" -ForegroundColor Green
 Write-Host ""
-Write-Host " Note: Some keyboard/mouse settings will take effect on the next login." -ForegroundColor Yellow -Bold
+Write-Host " Note: Some settings will take effect on the next login or after reboot." -ForegroundColor Yellow -Bold
 Write-Host " Please LOG OUT and LOG BACK IN, or REBOOT the VM now!" -ForegroundColor Yellow -Bold
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""

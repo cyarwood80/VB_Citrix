@@ -224,6 +224,10 @@ if ($opt -eq "2" -or $opt -eq "3") {
         Write-Success "Kept Nested HW VT-x Active for WSL2/Docker/VBS compatibility."
     }
 
+    # 4. Low-latency Compute Optimizations (Large Pages & Bypass Speculative Mitigations)
+    & $VBoxManagePath modifyvm $VMName --large-pages on --spec-ctrl off | Out-Null
+    Write-Success "Enabled Host Large Pages and disabled VM-context Speculative Execution Control."
+
     Write-Host ""
     Write-Success "Memory-Saving VM Configuration Profiles successfully applied!"
     Write-Host "======================================================================" -ForegroundColor Green

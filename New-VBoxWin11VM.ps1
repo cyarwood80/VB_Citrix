@@ -502,16 +502,25 @@ try {
     Write-Log "Failed to optimize visual effects: $_" "WARNING"
 }
 
-# Advanced Keyboard, Mouse, and Desktop responsiveness tweaks (Input Lag reduction)
+# Advanced Keyboard, Mouse, DWM, and scheduling responsiveness tweaks (Input & Graphics lag reduction)
 try {
-    Write-Log "Applying advanced keyboard, mouse, and desktop responsiveness tweaks..."
+    Write-Log "Applying advanced keyboard, mouse, DWM, and scheduling responsiveness tweaks..."
     
-    # System Profile Responsiveness adjustments
+    # System-wide scheduler, priority separation, and input queues
     $SysProfilePath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
     Set-ItemProperty -Path $SysProfilePath -Name "SystemResponsiveness" -Value 0 -Type DWord -Force
     Set-ItemProperty -Path $SysProfilePath -Name "NetworkThrottlingIndex" -Value 0xffffffff -Type DWord -Force
     
-    # Helper to apply user input tweaks to a targeted path
+    $PriorityControlPath = "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl"
+    Set-ItemProperty -Path $PriorityControlPath -Name "Win32PrioritySeparation" -Value 26 -Type DWord -Force
+    
+    $MouclassPath = "HKLM:\SYSTEM\CurrentControlSet\Services\mouclass\Parameters"
+    Set-ItemProperty -Path $MouclassPath -Name "MouseDataQueueSize" -Value 30 -Type DWord -Force
+    
+    $KbdclassPath = "HKLM:\SYSTEM\CurrentControlSet\Services\kbdclass\Parameters"
+    Set-ItemProperty -Path $KbdclassPath -Name "KeyboardDataQueueSize" -Value 30 -Type DWord -Force
+    
+    # Helper to apply user input & graphics tweaks to a targeted path
     $ApplyUserInputTweaks = {
         param([string]$basePath)
         
@@ -529,10 +538,21 @@ try {
         Set-ItemProperty -Path $kbdPath -Name "KeyboardDelay" -Value "0" -Type String -Force
         Set-ItemProperty -Path $kbdPath -Name "KeyboardSpeed" -Value "31" -Type String -Force
         
-        # Instantaneous Menu Show Delay
+        # Instantaneous Menu Show Delay & Drag Outline Only
         $desktopPath = Join-Path $basePath "Control Panel\Desktop"
         if (!(Test-Path $desktopPath)) { New-Item -Path $desktopPath -Force | Out-Null }
         Set-ItemProperty -Path $desktopPath -Name "MenuShowDelay" -Value "0" -Type String -Force
+        Set-ItemProperty -Path $desktopPath -Name "DragFullWindows" -Value "0" -Type String -Force
+        
+        # D. Minimize Window transition and DWM hover latency
+        $metricsPath = Join-Path $basePath "Control Panel\Desktop\WindowMetrics"
+        if (!(Test-Path $metricsPath)) { New-Item -Path $metricsPath -Force | Out-Null }
+        Set-ItemProperty -Path $metricsPath -Name "MinAnimate" -Value "0" -Type String -Force
+
+        $dwmPath = Join-Path $basePath "Software\Microsoft\Windows\DWM"
+        if (!(Test-Path $dwmPath)) { New-Item -Path $dwmPath -Force | Out-Null }
+        Set-ItemProperty -Path $dwmPath -Name "AlwaysHibernateThumbnails" -Value 1 -Type DWord -Force
+        Set-ItemProperty -Path $dwmPath -Name "EnableAeroPeek" -Value 0 -Type DWord -Force
     }
 
     # Apply to current user profile
@@ -550,9 +570,9 @@ try {
         Start-Sleep -Milliseconds 200
         reg unload HKU\DefaultUser | Out-Null
     }
-    Write-Log "Successfully applied mouse acceleration disable, keyboard response optimizations, and system profile tweaks!"
+    Write-Log "Successfully applied mouse acceleration disable, keyboard response, input queues, DWM, and system profile tweaks!"
 } catch {
-    Write-Log "Failed to apply input lag optimizations: $_" "WARNING"
+    Write-Log "Failed to apply input/graphics optimizations: $_" "WARNING"
 }
 
 # 4. Verify Citrix App Protection Service Status
@@ -663,17 +683,28 @@ if (-not $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administ
 }
 Write-Success "Elevated Administrator privileges confirmed."
 
-# 2. System Profile Responsiveness adjustments
-Write-Step "Configuring Windows Multimedia System Profile scheduler"
+# 2. System-wide Responsiveness and Input Queue Tuning
+Write-Step "Configuring System-wide low-latency responsiveness and input buffer queues"
 try {
+    # SystemResponsiveness = 0 allocates 100% of CPU resource scheduling priority to interactive user processes
     $SysProfilePath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile"
-    # SystemResponsiveness = 0 allocates 100% of CPU resource scheduling priority to interactive user processes (0x14/20% is default)
     Set-ItemProperty -Path $SysProfilePath -Name "SystemResponsiveness" -Value 0 -Type DWord -Force
-    # NetworkThrottlingIndex = 0xffffffff disables network packet throttling under high CPU load
     Set-ItemProperty -Path $SysProfilePath -Name "NetworkThrottlingIndex" -Value 0xffffffff -Type DWord -Force
-    Write-Success "System scheduler optimized for 100% user process priority."
+
+    # Win32PrioritySeparation = 26 (0x1a) allocates short, variable, high priority scheduling quanta to foreground processes (snappy UI)
+    $PriorityControlPath = "HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl"
+    Set-ItemProperty -Path $PriorityControlPath -Name "Win32PrioritySeparation" -Value 26 -Type DWord -Force
+
+    # Input Queues: reduces buffer depth from 100 to 30 to flush events instantly and prevent input lag buildup
+    $MouclassPath = "HKLM:\SYSTEM\CurrentControlSet\Services\mouclass\Parameters"
+    Set-ItemProperty -Path $MouclassPath -Name "MouseDataQueueSize" -Value 30 -Type DWord -Force
+
+    $KbdclassPath = "HKLM:\SYSTEM\CurrentControlSet\Services\kbdclass\Parameters"
+    Set-ItemProperty -Path $KbdclassPath -Name "KeyboardDataQueueSize" -Value 30 -Type DWord -Force
+
+    Write-Success "System scheduler, priority separation, and mouse/keyboard buffer queues tuned successfully."
 } catch {
-    Write-Warning "Failed to optimize system profile scheduler: $_"
+    Write-Warning "Failed to optimize system-wide responsiveness settings: $_"
 }
 
 # 3. Apply Low Latency TCP settings (TCP Ack Frequency & TCP No Delay)
@@ -729,6 +760,21 @@ $ApplyUserInputTweaks = {
     if (!(Test-Path $desktopPath)) { New-Item -Path $desktopPath -Force | Out-Null }
     # MenuShowDelay = 0ms (makes all menus/overlays render instantaneously upon click)
     Set-ItemProperty -Path $desktopPath -Name "MenuShowDelay" -Value "0" -Type String -Force
+    # DragFullWindows = "0" (shows window border outline while dragging, saving massive DWM redraws)
+    Set-ItemProperty -Path $desktopPath -Name "DragFullWindows" -Value "0" -Type String -Force
+    
+    # D. Minimize Window transition and DWM hover latency
+    $metricsPath = Join-Path $basePath "Control Panel\Desktop\WindowMetrics"
+    if (!(Test-Path $metricsPath)) { New-Item -Path $metricsPath -Force | Out-Null }
+    # MinAnimate = "0" (disables minimize/maximize animation for instant window transitions)
+    Set-ItemProperty -Path $metricsPath -Name "MinAnimate" -Value "0" -Type String -Force
+
+    $dwmPath = Join-Path $basePath "Software\Microsoft\Windows\DWM"
+    if (!(Test-Path $dwmPath)) { New-Item -Path $dwmPath -Force | Out-Null }
+    # AlwaysHibernateThumbnails = 1 (disables live background DWM taskbar hover thumbnail rendering)
+    Set-ItemProperty -Path $dwmPath -Name "AlwaysHibernateThumbnails" -Value 1 -Type DWord -Force
+    # EnableAeroPeek = 0 (disables background desktop peek hover overlays)
+    Set-ItemProperty -Path $dwmPath -Name "EnableAeroPeek" -Value 0 -Type DWord -Force
 }
 
 # 6. Apply Input Tweaks to Current Administrator Profile
@@ -789,7 +835,7 @@ try {
 # 9. Finished
 Show-Banner
 Write-Host "======================================================================" -ForegroundColor Green -Bold
-Write-Host "             GUEST INPUT LAG OPTIMIZATION COMPLETE!                   " -ForegroundColor Green -Bold
+Write-Host "             GUEST INPUT & GRAPHICS OPTIMIZATION COMPLETE!            " -ForegroundColor Green -Bold
 Write-Host "======================================================================" -ForegroundColor Green -Bold
 Write-Host ""
 Write-Host " The following low-latency profiles have been applied successfully:" -ForegroundColor White
@@ -798,12 +844,16 @@ Write-Host " $($CheckChar) Shortened Keyboard Repeat Delay to 250ms (Shortest po
 Write-Host " $($CheckChar) Maximized Keyboard Auto-Repeat Rate (Speed 31)" -ForegroundColor Green
 Write-Host " $($CheckChar) Minimized Menu & Hover opening latency (0ms / 8ms)" -ForegroundColor Green
 Write-Host " $($CheckChar) Set System Responsiveness scheduler to 100% User Process" -ForegroundColor Green
+Write-Host " $($CheckChar) Set CPU Foreground Priority separation to 26 (Interactive UI)" -ForegroundColor Green
+Write-Host " $($CheckChar) Shrunk Mouse/Keyboard data queue depth to 30 (Instant event flush)" -ForegroundColor Green
+Write-Host " $($CheckChar) Enabled Drag Outline-Only window drawing (No DWM redraw lag)" -ForegroundColor Green
+Write-Host " $($CheckChar) Enabled DWM live hover thumbnail and Aero Peek hibernation" -ForegroundColor Green
 Write-Host " $($CheckChar) Disabled Network throttling under high CPU utilization" -ForegroundColor Green
 Write-Host " $($CheckChar) Set TCP Ack Frequency & TCP No Delay on all interfaces" -ForegroundColor Green
 Write-Host " $($CheckChar) Enabled High Performance Windows Power Plan" -ForegroundColor Green
 Write-Host " $($CheckChar) Disabled OS-level visual transition effects" -ForegroundColor Green
 Write-Host ""
-Write-Host " Note: Some keyboard/mouse settings will take effect on the next login." -ForegroundColor Yellow -Bold
+Write-Host " Note: Some settings will take effect on the next login or after reboot." -ForegroundColor Yellow -Bold
 Write-Host " Please LOG OUT and LOG BACK IN, or REBOOT the VM now!" -ForegroundColor Yellow -Bold
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
@@ -1013,10 +1063,10 @@ function Invoke-HardwarePassthroughAndOptimizations {
     & $VBoxManagePath modifyvm $VMName --audio-in on --audio-out on | Out-Null
     Write-Success "Upgraded controller to Intel HD Audio and enabled HPET precision timers."
 
-    # Apply USB, Network, Priority, and Keyboard/Mouse
-    Write-Step "Enabling USB 3.0 (xHCI), Gigabit Server NIC (82545EM), High Process Priority, and USB Input Emulation"
-    & $VBoxManagePath modifyvm $VMName --usb-xhci on --nic-type1 82545EM --vm-process-priority high --mouse usbtablet --keyboard usb | Out-Null
-    Write-Success "USB 3.0 enabled, Gigabit Server NIC configured, High Process Priority set, and USB Mouse/Keyboard active."
+    # Apply USB, Network, Priority, Keyboard/Mouse, and Low-Latency Paging/Speculative controls
+    Write-Step "Enabling USB 3.0 (xHCI), Gigabit Server NIC (82545EM), High Process Priority, Low-Latency Large Pages, and Speculative mitigations bypass"
+    & $VBoxManagePath modifyvm $VMName --usb-xhci on --nic-type1 82545EM --vm-process-priority high --mouse usbtablet --keyboard usb --large-pages on --spec-ctrl off | Out-Null
+    Write-Success "USB 3.0 enabled, Gigabit Server NIC configured, High Process Priority set, USB Mouse/Keyboard active, and Low-Latency compute parameters applied."
 
     # Clear and register USB filters
     Write-Step "Removing old USB filters to prevent duplicates"
@@ -1389,9 +1439,9 @@ Show-ProgressBar 30 "Injecting Advanced High-Performance Virtualization & Priori
 & $VBoxManagePath modifyvm $VMName --firmware efi64 | Out-Null
 & $VBoxManagePath modifyvm $VMName --tpm-type 2.0 | Out-Null
 & $VBoxManagePath modifynvram $VMName secureboot --enable | Out-Null
-# Configure Bidirectional Clipboard, Drag & Drop, Intel HD Audio, HPET Timer, Gigabit Server NIC, High Host CPU Priority, and USB Mouse/Keyboard Emulation
-& $VBoxManagePath modifyvm $VMName --clipboard-mode bidirectional --drag-and-drop bidirectional --audio-controller hda --audio-driver was --audio-in on --audio-out on --x86-hpet on --nic-type1 82545EM --vm-process-priority high --mouse usbtablet --keyboard usb | Out-Null
-Write-Success "Nested VT-x, Hyper-V, HPET, Server NIC, High CPU scheduling priority, and USB Mouse/Keyboard enabled!"
+# Configure Bidirectional Clipboard, Drag & Drop, Intel HD Audio, HPET Timer, Gigabit Server NIC, High Host CPU Priority, USB Mouse/Keyboard Emulation, and Low-Latency compute parameters
+& $VBoxManagePath modifyvm $VMName --clipboard-mode bidirectional --drag-and-drop bidirectional --audio-controller hda --audio-driver was --audio-in on --audio-out on --x86-hpet on --nic-type1 82545EM --vm-process-priority high --mouse usbtablet --keyboard usb --large-pages on --spec-ctrl off | Out-Null
+Write-Success "Nested VT-x, Hyper-V, HPET, Server NIC, High CPU scheduling priority, USB Mouse/Keyboard, Large Pages, and Speculative Bypass enabled!"
 
 # 6. Configure Integrated Accessory USB Filters
 Show-ProgressBar 35 "Registering hardware USB filters..."
